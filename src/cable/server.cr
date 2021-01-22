@@ -19,8 +19,8 @@ module Cable
     def initialize
       @connections = {} of String => Connection
       @channels = {} of String => Array(Cable::Channel)
-      @redis_subscribe = Redis.new(url: Cable.settings.url)
-      @redis_publish = Redis.new(url: Cable.settings.url)
+      @redis_subscribe = Redis::Connection.new(URI.parse(Cable.settings.url))
+      @redis_publish = Redis::Client.new(URI.parse(Cable.settings.url))
       @fiber_channel = ::Channel({String, String}).new
       subscribe
       process_subscribed_messages
@@ -44,10 +44,8 @@ module Cable
 
       @channels[identifier] << channel
 
-      request = Redis::Request.new
-      request << "subscribe"
-      request << identifier
-      redis_subscribe._connection.send(request)
+      redis_subscribe.encode({"subscribe", identifier})
+      redis_subscribe.flush
     end
 
     def unsubscribe_channel(channel : Channel, identifier : String)
@@ -55,19 +53,13 @@ module Cable
         @channels[identifier].delete(channel)
 
         if @channels[identifier].size == 0
-          request = Redis::Request.new
-          request << "unsubscribe"
-          request << identifier
-          redis_subscribe._connection.send(request)
+          redis_subscribe.unsubscribe identifier
 
           @channels.delete(identifier)
         end
 
       else
-        request = Redis::Request.new
-        request << "unsubscribe"
-        request << identifier
-        redis_subscribe._connection.send(request)
+        redis_subscribe.unsubscribe identifier
       end
     end
 
@@ -110,9 +102,7 @@ module Cable
     end
 
     def shutdown
-      request = Redis::Request.new
-      request << "unsubscribe"
-      redis_subscribe._connection.send(request)
+      redis_subscribe.run({"unsubscribe"})
       redis_subscribe.close
       redis_publish.close
       connections.each do |k, v|
@@ -133,8 +123,8 @@ module Cable
 
     private def subscribe
       spawn do
-        redis_subscribe.subscribe("_internal") do |on|
-          on.message do |channel, message|
+        redis_subscribe.subscribe("_internal") do |subscription|
+          subscription.on_message do |channel, message|
             if channel == "_internal" && message == "debug"
               puts self.debug
             else

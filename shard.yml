@@ -3,6 +3,7 @@ version: 0.1.0
 
 authors:
   - Celso Fernandes <celso.fernandes@gmail.com>
+  - Jamie Gaskins <jgaskins@hey.com>
 
 crystal: 0.35.0
 
@@ -10,8 +11,7 @@ dependencies:
   schedule:
     github: hugoabonizio/schedule.cr
   redis:
-    github: stefanwille/crystal-redis
-    version: ~> 2.6.0
+    github: jgaskins/redis
   habitat:
     github: luckyframework/habitat
 
