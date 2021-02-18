@@ -42,6 +42,11 @@ module Cable
       Cable::Logger.debug { "#{self.class} is streaming from #{stream_identifier}" }
     end
 
+    def self.broadcast_to(channel : String, message : String)
+      Cable::Logger.debug { "[ActionCable] Broadcasting to #{channel}: #{message}" }
+      Cable.server.publish(channel, message)
+    end
+
     def self.broadcast_to(channel : String, message : JSON::Any)
       Cable::Logger.debug { "[ActionCable] Broadcasting to #{channel}: #{message}" }
       Cable.server.publish(channel, message.to_json)
