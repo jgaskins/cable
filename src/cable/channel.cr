@@ -17,7 +17,6 @@ module Cable
     end
 
     def subscribed
-      # raise Exception.new("Implement the `subscribed` method")
     end
 
     def close
