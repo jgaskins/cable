@@ -1,10 +1,11 @@
 require "http/server"
 
 module Cable
-  class Handler
+  class Handler(T)
     include HTTP::Handler
 
-    def initialize(@connection_class : Cable::Connection.class)
+    def on_error(&@on_error : Exception ->) : self
+      self
     end
 
     def call(context)
@@ -17,18 +18,14 @@ module Cable
       context.response.headers["Sec-WebSocket-Protocol"] = "actioncable-v1-json"
 
       ws = HTTP::WebSocketHandler.new do |socket, context|
-        connection = @connection_class.new(context.request, socket)
+        connection = T.new(context.request, socket)
         connection_id = connection.connection_identifier
         Cable.server.add_connection(connection)
 
         # Send welcome message to the client
         socket.send({type: "welcome"}.to_json)
 
-        Cable::WebsocketPinger.build(socket)
-
-        socket.on_ping do
-          socket.pong context.request.path
-        end
+        Cable::WebsocketPinger.start socket
 
         # Handle incoming message and echo back to the client
         socket.on_message do |message|

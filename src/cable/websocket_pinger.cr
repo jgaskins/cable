@@ -12,8 +12,8 @@ module Cable
       @@seconds = 3
     end
 
-    def self.build(socket : HTTP::WebSocket)
-      self.new(socket)
+    def self.start(socket : HTTP::WebSocket)
+      new(socket).start
     end
 
     def self.seconds
@@ -21,10 +21,13 @@ module Cable
     end
 
     def initialize(@socket : HTTP::WebSocket)
+    end
+
+    def start
       runner = Schedule::Runner.new
       runner.every(Cable::WebsocketPinger.seconds.seconds) do
-        raise Schedule::StopException.new("Stoped") if socket.closed?
-        socket.send({type: "ping", message: Time.utc.to_unix}.to_json)
+        raise Schedule::StopException.new("Stoped") if @socket.closed?
+        @socket.send({type: "ping", message: Time.utc.to_unix_f}.to_json)
       end
     end
   end

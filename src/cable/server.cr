@@ -1,4 +1,9 @@
+require "mutex"
+require "set"
+
 module Cable
+  alias Channels = Set(Cable::Channel)
+
   def self.server
     @@server ||= Server.new
   end
@@ -11,17 +16,15 @@ module Cable
   end
 
   class Server
-    getter connections
-    getter redis_subscribe
-    getter redis_publish
-    getter fiber_channel
+    getter connections = {} of String => Connection
+    getter redis_subscribe = Redis::Connection.new(URI.parse(Cable.settings.url))
+    getter redis_publish = Redis::Client.new(URI.parse(Cable.settings.url))
+    getter fiber_channel = ::Channel({String, String}).new
+
+    @channels = {} of String => Channels
+    @channel_mutex = Mutex.new
 
     def initialize
-      @connections = {} of String => Connection
-      @channels = {} of String => Array(Cable::Channel)
-      @redis_subscribe = Redis::Connection.new(URI.parse(Cable.settings.url))
-      @redis_publish = Redis::Client.new(URI.parse(Cable.settings.url))
-      @fiber_channel = ::Channel({String, String}).new
       subscribe
       process_subscribed_messages
     end
@@ -31,35 +34,36 @@ module Cable
     end
 
     def remove_connection(connection_id)
-      connection = connections.delete(connection_id)
-      if connection.is_a?(Connection)
-        connection.close
-      end
+      connections.delete(connection_id).try(&.close)
     end
 
     def subscribe_channel(channel : Channel, identifier : String)
-      if !@channels.has_key?(identifier)
-        @channels[identifier] = [] of Cable::Channel
-      end
+      @channel_mutex.synchronize do
+        if !@channels.has_key?(identifier)
+          @channels[identifier] = Channels.new
+        end
 
-      @channels[identifier] << channel
+        @channels[identifier] << channel
+      end
 
       redis_subscribe.encode({"subscribe", identifier})
       redis_subscribe.flush
     end
 
     def unsubscribe_channel(channel : Channel, identifier : String)
-      if @channels.has_key?(identifier)
-        @channels[identifier].delete(channel)
+      @channel_mutex.synchronize do
+        if @channels.has_key?(identifier)
+          @channels[identifier].delete(channel)
 
-        if @channels[identifier].size == 0
+          if @channels[identifier].size == 0
+            redis_subscribe.unsubscribe identifier
+
+            @channels.delete(identifier)
+          end
+
+        else
           redis_subscribe.unsubscribe identifier
-
-          @channels.delete(identifier)
         end
-
-      else
-        redis_subscribe.unsubscribe identifier
       end
     end
 
@@ -68,16 +72,14 @@ module Cable
     end
 
     def send_to_channels(channel, message)
-      parsed_message = JSON.parse(message)
-
       @channels[channel].each do |channel|
         Cable::Logger.debug { "#{channel.class} transmitting #{message} (via streamed from #{channel.stream_identifier})" }
         channel.connection.socket.send({
           identifier: channel.identifier,
-          message:    parsed_message,
+          message:    message,
         }.to_json)
+      rescue IO::Error
       end
-    rescue IO::Error
     end
 
     def debug
@@ -114,8 +116,7 @@ module Cable
       server = self
       spawn do
         while received = fiber_channel.receive
-          channel = received[0]
-          message = received[1]
+          channel, message = received
           server.send_to_channels(channel, message)
         end
       end

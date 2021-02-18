@@ -4,31 +4,21 @@ module Cable
   class Connection
     class UnathorizedConnectionException < Exception; end
 
-    @@mock : Cable::Connection?
-
     property internal_identifier : String = "0"
-    getter token : String
     getter connection_identifier : String
 
+    # {
+    #   "Turbo::StreamsChannel" => {
+    #     "signed-stream-name" => my_channel,
+    #   },
+    # }
     CHANNELS = {} of String => Hash(String, Cable::Channel)
 
     getter socket
-    getter id : String
-
-    def identifier
-      ""
-    end
+    getter id : UUID
 
     macro identified_by(name)
-      @{{name.id}} : String = ""
-
-      def {{name.id}}=(value : String)
-        @{{name.id}} = value
-      end
-
-      def {{name.id}}
-        @{{name.id}}
-      end
+      property {{name.id}} = ""
 
       private def internal_identifier
         @{{name.id}}
@@ -36,43 +26,15 @@ module Cable
     end
 
     macro owned_by(type_definition)
-      @{{type_definition.var}} : {{type_definition.type}}?
-
-      def {{type_definition.var}}=(value : {{type_definition.type}})
-        @{{type_definition.var}} = value
-      end
-
-      def {{type_definition.var}}
-        @{{type_definition.var}}
-      end
-    end
-
-    def self.use_mock(mock, &block)
-      @@mock = mock
-
-      yield
-
-      @@mock = nil
-    end
-
-    def self.build(request : HTTP::Request, socket : HTTP::WebSocket)
-      if mock = @@mock
-        return mock
-      else
-        self.new(request, socket)
-      end
+      property {{type_definition.var}} : {{type_definition.type}}?
     end
 
     def initialize(@request : HTTP::Request, @socket : HTTP::WebSocket)
-      @token = @request.query_params.fetch(Cable.settings.token) {
-        raise "No token on params"
-      }
-      @id = UUID.random.to_s
-      @connection_identifier = ""
+      @id = UUID.random
+      @connection_identifier = "#{internal_identifier}-#{@id}"
 
       begin
         connect
-        @connection_identifier = "#{internal_identifier}-#{@id}"
       rescue e : UnathorizedConnectionException
         socket.close :normal_closure, "Farewell"
         Cable::Logger.debug { "An unauthorized connection attempt was rejected" }
@@ -88,6 +50,7 @@ module Cable
       Connection::CHANNELS[connection_identifier].each do |identifier, channel|
         channel.close
         Connection::CHANNELS[connection_identifier].delete(identifier)
+      rescue e : IO::Error
       end
       socket.close
     end
@@ -111,15 +74,13 @@ module Cable
       )
       Connection::CHANNELS[connection_identifier] ||= {} of String => Cable::Channel
       Connection::CHANNELS[connection_identifier][payload.identifier] = channel
-      # Cable.server.subscribe_channel(channel: channel, identifier: payload.identifier)
       channel.subscribed
       Cable::Logger.debug { "#{payload.channel} is transmitting the subscription confirmation" }
       socket.send({type: "confirm_subscription", identifier: payload.identifier}.to_json)
     end
 
     def message(payload)
-      if Connection::CHANNELS[connection_identifier].has_key?(payload.identifier)
-        channel = Connection::CHANNELS[connection_identifier][payload.identifier]
+      if channel = Connection::CHANNELS[connection_identifier][payload.identifier]?
         if payload.action?
           Cable::Logger.debug { "#{channel.class}#perform(\"#{payload.action}\", #{payload.data})" }
           channel.perform(payload.action, payload.data)
