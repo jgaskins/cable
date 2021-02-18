@@ -23,7 +23,7 @@ module Cable
       if stream_identifier = @stream_identifier
         Cable.server.unsubscribe_channel(channel: self, identifier: stream_identifier)
       end
-      Cable::Logger.info "#{self.class.name} stopped streaming from #{identifier}"
+      Cable::Logger.debug { "#{self.class.name} stopped streaming from #{identifier}" }
       unsubscribed
     end
 
@@ -39,17 +39,17 @@ module Cable
     def stream_from(stream_identifier)
       @stream_identifier = stream_identifier
       Cable.server.subscribe_channel(channel: self, identifier: stream_identifier)
-      Cable::Logger.info "#{self.class.to_s} is streaming from #{stream_identifier}"
+      Cable::Logger.debug { "#{self.class} is streaming from #{stream_identifier}" }
     end
 
     def self.broadcast_to(channel : String, message : JSON::Any)
-      Cable::Logger.info "[ActionCable] Broadcasting to #{channel}: #{message}"
-      Cable.server.publish("#{channel}", message.to_json)
+      Cable::Logger.debug { "[ActionCable] Broadcasting to #{channel}: #{message}" }
+      Cable.server.publish(channel, message.to_json)
     end
 
     def self.broadcast_to(channel : String, message : Hash(String, String))
-      Cable::Logger.info "[ActionCable] Broadcasting to #{channel}: #{message}"
-      Cable.server.publish("#{channel}", message.to_json)
+      Cable::Logger.debug { "[ActionCable] Broadcasting to #{channel}: #{message}" }
+      Cable.server.publish(channel, message.to_json)
     end
   end
 end

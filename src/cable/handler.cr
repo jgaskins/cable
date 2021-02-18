@@ -12,7 +12,7 @@ module Cable
 
       remote_address = context.request.remote_address
       path = context.request.path
-      Cable::Logger.info "Started GET \"#{path}\" [WebSocket] for #{remote_address} at #{Time.utc.to_s}"
+      Cable::Logger.debug { "Started GET \"#{path}\" [WebSocket] for #{remote_address} at #{Time.utc.to_s}" }
 
       context.response.headers["Sec-WebSocket-Protocol"] = "actioncable-v1-json"
 
@@ -35,17 +35,17 @@ module Cable
           begin
             connection.receive(message)
           rescue e : Exception
-            Cable::Logger.info "Exception: #{e.message}"
+            Cable::Logger.error { "Exception: #{e.message}" }
           end
         end
 
         socket.on_close do
           Cable.server.remove_connection(connection_id)
-          Cable::Logger.info "Finished \"#{path}\" [WebSocket] for #{remote_address} at #{Time.utc.to_s}"
+          Cable::Logger.debug { "Finished \"#{path}\" [WebSocket] for #{remote_address} at #{Time.utc.to_s}" }
         end
       end
 
-      Cable::Logger.info "Successfully upgraded to WebSocket (REQUEST_METHOD: GET, HTTP_CONNECTION: Upgrade, HTTP_UPGRADE: websocket)"
+      Cable::Logger.debug { "Successfully upgraded to WebSocket (REQUEST_METHOD: GET, HTTP_CONNECTION: Upgrade, HTTP_UPGRADE: websocket)" }
       ws.call(context)
     end
 

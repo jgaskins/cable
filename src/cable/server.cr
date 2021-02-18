@@ -63,15 +63,15 @@ module Cable
       end
     end
 
-    def publish(channel, message)
-      redis_publish.publish("#{channel}", message)
+    def publish(channel : String, message)
+      redis_publish.publish(channel, message)
     end
 
     def send_to_channels(channel, message)
       parsed_message = JSON.parse(message)
 
       @channels[channel].each do |channel|
-        Cable::Logger.info "#{channel.class} transmitting #{parsed_message} (via streamed from #{channel.stream_identifier})"
+        Cable::Logger.debug { "#{channel.class} transmitting #{message} (via streamed from #{channel.stream_identifier})" }
         channel.connection.socket.send({
           identifier: channel.identifier,
           message:    parsed_message,
@@ -81,24 +81,24 @@ module Cable
     end
 
     def debug
-      Cable::Logger.debug "-" * 80
-      Cable::Logger.debug "Some Good Information"
-      Cable::Logger.debug "Connections"
+      Cable::Logger.debug { "-" * 80 }
+      Cable::Logger.debug { "Some Good Information" }
+      Cable::Logger.debug { "Connections" }
       @connections.each do |k, v|
-        Cable::Logger.debug "Connection Key: #{k}"
+        Cable::Logger.debug { "Connection Key: #{k}" }
       end
-      Cable::Logger.debug "Channels"
+      Cable::Logger.debug { "Channels" }
       @channels.each do |k, v|
-        Cable::Logger.debug "Channel Key: #{k}"
-        Cable::Logger.debug "Channels"
+        Cable::Logger.debug { "Channel Key: #{k}" }
+        Cable::Logger.debug { "Channels" }
         v.each do |channel|
-          Cable::Logger.debug "From Channel: #{channel.connection.connection_identifier}"
-          Cable::Logger.debug "Params: #{channel.params}"
-          Cable::Logger.debug "ID: #{channel.identifier}"
-          Cable::Logger.debug "Stream ID:: #{channel.stream_identifier}"
+          Cable::Logger.debug { "From Channel: #{channel.connection.connection_identifier}" }
+          Cable::Logger.debug { "Params: #{channel.params}" }
+          Cable::Logger.debug { "ID: #{channel.identifier}" }
+          Cable::Logger.debug { "Stream ID:: #{channel.stream_identifier}" }
         end
       end
-      Cable::Logger.debug "-" * 80
+      Cable::Logger.debug { "-" * 80 }
     end
 
     def shutdown

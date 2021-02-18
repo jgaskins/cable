@@ -74,8 +74,8 @@ module Cable
         connect
         @connection_identifier = "#{internal_identifier}-#{@id}"
       rescue e : UnathorizedConnectionException
-        socket.close(HTTP::WebSocket::CloseCode::NormalClosure, "Farewell")
-        Cable::Logger.info("An unauthorized connection attempt was rejected")
+        socket.close :normal_closure, "Farewell"
+        Cable::Logger.debug { "An unauthorized connection attempt was rejected" }
       end
     end
 
@@ -113,7 +113,7 @@ module Cable
       Connection::CHANNELS[connection_identifier][payload.identifier] = channel
       # Cable.server.subscribe_channel(channel: channel, identifier: payload.identifier)
       channel.subscribed
-      Cable::Logger.info "#{payload.channel} is transmitting the subscription confirmation"
+      Cable::Logger.debug { "#{payload.channel} is transmitting the subscription confirmation" }
       socket.send({type: "confirm_subscription", identifier: payload.identifier}.to_json)
     end
 
@@ -121,11 +121,11 @@ module Cable
       if Connection::CHANNELS[connection_identifier].has_key?(payload.identifier)
         channel = Connection::CHANNELS[connection_identifier][payload.identifier]
         if payload.action?
-          Cable::Logger.info "#{channel.class}#perform(\"#{payload.action}\", #{payload.data})"
+          Cable::Logger.debug { "#{channel.class}#perform(\"#{payload.action}\", #{payload.data})" }
           channel.perform(payload.action, payload.data)
         else
           begin
-            Cable::Logger.info "#{channel.class}#receive(#{payload.data})"
+            Cable::Logger.debug { "#{channel.class}#receive(#{payload.data})" }
             channel.receive(payload.data)
           rescue e : TypeCastError
           end
@@ -134,7 +134,7 @@ module Cable
     end
 
     def self.broadcast_to(channel : String, message : String)
-      Cable.server.publish("#{channel}", message)
+      Cable.server.publish(channel, message)
     end
   end
 end
