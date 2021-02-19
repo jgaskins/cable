@@ -42,7 +42,6 @@ module Cable
     end
 
     def connect
-      raise Exception.new("Implement the `connect` method")
     end
 
     def close
