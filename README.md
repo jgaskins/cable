@@ -1,7 +1,5 @@
 # Cable
 
-[![Build Status](https://travis-ci.com/cable-cr/cable.svg?branch=master)](https://travis-ci.com/cable-cr/cable)
-
 It's like [ActionCable](https://guides.rubyonrails.org/action_cable_overview.html) (100% compatible with JS Client), but you know, for Crystal
 
 ## Installation
@@ -11,7 +9,7 @@ It's like [ActionCable](https://guides.rubyonrails.org/action_cable_overview.htm
    ```yaml
    dependencies:
      cable:
-       github: cable-cr/cable
+       github: jgaskins/cable
    ```
 
 2. Run `shards install`
@@ -20,6 +18,19 @@ It's like [ActionCable](https://guides.rubyonrails.org/action_cable_overview.htm
 
 ```crystal
 require "cable"
+
+Cable.configure do |c|
+  c.route = "/cable" # the URL your JS Client will connect to, this is the default
+end
+```
+
+### With `HTTP::Server`
+
+```crystal
+http = HTTP::Server.new([
+  Cable::Handler(ApplicationCable::Connection).new,
+  MyApp.new,
+])
 ```
 
 ### With Lucky
@@ -30,25 +41,16 @@ On your `src/app_server.cr` add the `Cable::Handler` before `Lucky::RouteHandler
 class AppServer < Lucky::BaseAppServer
   def middleware
     [
-      Cable::Handler.new(ApplicationCable::Connection),
+      Cable::Handler(ApplicationCable::Connection).new,
       Lucky::RouteHandler.new,
     ]
    end
 end
 ```
 
-After that, you can configure your `Cable`, the defaults are:
+## Customizing connections
 
-```crystal
-Cable.configure do |settings|
-  settings.route = "/cable"    # the URL your JS Client will connect
-  settings.token = "token"     # The query string parameter used to get the token
-end
-```
-
-Then you need to implement a few classes
-
-The connection class is how you are gonna handle connections, it's referenced on the `src/app_server.cr` when creating the handler.
+Create a subclass of `Cable::Connection` and override the `connect` method to define what happens when a client connects:
 
 ```crystal
 module ApplicationCable
@@ -69,17 +71,22 @@ module ApplicationCable
       self.identifier = payload["id"].to_s
       self.current_user = UserQuery.find(payload["id"])
     rescue e : Avram::RecordNotFoundError
-       reject_unauthorized_connection
+      reject_unauthorized_connection
     end
   end
 end
 ```
 
-Then you need your base channel, just to make easy to aggregate your app's cables logic
+## Customizing channel behavior
+
+Create a subclass of `Cable::Channel` and override `subscribed`, `unsubscribed`, `receive(message)`, and/or `perform(action, message)`
 
 ```crystal
 module ApplicationCable
   class Channel < Cable::Channel
+    def subscribed
+      Datadog.metrics.increment "cable.channel.subscribed", tags: %w[channel:#{self.class.name.downcase}]
+    end
   end
 end
 ```
